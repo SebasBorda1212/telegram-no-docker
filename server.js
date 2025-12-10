@@ -71,6 +71,7 @@ app.get("/pdf", async (req, res) => {
     fs.writeFileSync(tempPath, pdfBytes);
 
     const protectedPath = path.join(pdfDir, `reporte-${Date.now()}-protegido.pdf`);
+    
 
     // Encriptar con QPDF real
     const QPDF_PATH = `"C:\\Program Files\\qpdf 12.2.0\\bin\\qpdf.exe"`;
