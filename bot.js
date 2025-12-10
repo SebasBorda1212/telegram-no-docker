@@ -6,7 +6,7 @@ dotenv.config();
 
 const { Pool } = pkg;
 
-// Pool de conexión PostgreSQL
+// Conexión a PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: false
@@ -16,7 +16,7 @@ const pool = new Pool({
 export const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // Manejo de errores global
-bot.catch((err, ctx) => {
+bot.catch((err) => {
   console.error("Error en el bot:", err);
 });
 
@@ -31,27 +31,61 @@ bot.use(async (ctx, next) => {
   return next();
 });
 
-// Manejo de mensajes de texto
+// ===== COMANDO START =====
+bot.start((ctx) => {
+  ctx.reply(` Bot activo
+
+Comandos:
+/ubicacion - Enviar tu ubicación GPS`);
+});
+
+// ===== COMANDO UBICACIÓN =====
+bot.command("ubicacion", (ctx) => {
+  return ctx.reply(
+    "Pulsa el botón para enviar tu ubicación GPS 📍",
+    Markup.keyboard([
+      Markup.button.locationRequest("📍 Enviar mi ubicación")
+    ])
+      .resize()
+      .oneTime()
+  );
+});
+
+// ===== RECIBIR UBICACIÓN GPS =====
+bot.on("location", (ctx) => {
+  const lat = ctx.message.location.latitude;
+  const lon = ctx.message.location.longitude;
+
+  // Guardar ubicación para el server.js
+  process.env.LAST_LAT = lat;
+  process.env.LAST_LON = lon;
+
+  ctx.reply(` Ubicación guardada:
+Latitud: ${lat}
+Longitud: ${lon}`);
+});
+
+// ===== MENSAJES DE TEXTO =====
 bot.on("text", async (ctx) => {
   const userId = ctx.from.id;
   const name = ctx.from.first_name;
   const message = ctx.message.text?.trim();
 
   try {
-    // Insertar usuario si no existe
+    // Guardar usuario
     await pool.query(
       "INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
       [userId, name]
     );
 
-    // Insertar mensaje
+    // Guardar mensaje
     await pool.query(
       "INSERT INTO messages (user_id, message) VALUES ($1, $2)",
       [userId, message]
     );
   } catch (err) {
     console.error("Error guardando en la BD:", err);
-    return ctx.reply("Ocurrió un problema guardando tu mensaje.");
+    return ctx.reply(" Error guardando el mensaje.");
   }
 
   if (message.toLowerCase() === "hola") {
@@ -66,18 +100,18 @@ bot.on("text", async (ctx) => {
     );
   }
 
-  return ctx.reply("Recibí tu mensaje.");
+  return ctx.reply(" Mensaje guardado en la base de datos.");
 });
 
-// Acciones de los botones
+// ===== BOTONES =====
 bot.action("CONTACTO", (ctx) => {
   ctx.answerCbQuery();
-  ctx.reply("Puedes contactarnos al WhatsApp +57 3176072302");
+  ctx.reply(" WhatsApp: +57 3176072302");
 });
 
 bot.action("AYUDA", (ctx) => {
   ctx.answerCbQuery();
-  ctx.reply("En qué puedo ayudarte?");
+  ctx.reply("¿En qué puedo ayudarte?");
 });
 
 bot.action("ESTADO", (ctx) => {

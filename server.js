@@ -37,6 +37,15 @@ app.get("/pdf", async (req, res) => {
       return res.status(400).send("Usa: /pdf?email=correo@gmail.com");
     }
 
+    // ===== GPS REAL DESDE TELEGRAM =====
+    const lat = process.env.LAST_LAT || null;
+    const lon = process.env.LAST_LON || null;
+
+    const mapaLink = (lat && lon)
+      ? `https://www.google.com/maps?q=${lat},${lon}`
+      : "Ubicación GPS no enviada";
+
+    // ===== CONSULTA A LA BD =====
     const result = await pool.query(`
       SELECT users.name, messages.message, messages.created_at
       FROM messages
@@ -45,6 +54,7 @@ app.get("/pdf", async (req, res) => {
       LIMIT 20
     `);
 
+    // ===== CREAR PDF (SIN GPS) =====
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([600, 800]);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -63,24 +73,19 @@ app.get("/pdf", async (req, res) => {
     const pdfBytes = await pdfDoc.save();
 
     const pdfDir = path.join(process.cwd(), "pdfs");
-    if (!fs.existsSync(pdfDir)) {
-      fs.mkdirSync(pdfDir);
-    }
+    if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir);
 
     const tempPath = path.join(pdfDir, `temp-${Date.now()}.pdf`);
     fs.writeFileSync(tempPath, pdfBytes);
 
     const protectedPath = path.join(pdfDir, `reporte-${Date.now()}-protegido.pdf`);
-    
 
-    // Encriptar con QPDF real
+    // ===== ENCRIPTAR PDF CON QPDF =====
     const QPDF_PATH = `"C:\\Program Files\\qpdf 12.2.0\\bin\\qpdf.exe"`;
-
-await execPromise(`${QPDF_PATH} --encrypt ${PDF_PASSWORD} ${PDF_PASSWORD} 256 -- "${tempPath}" "${protectedPath}"`);
-
-
+    await execPromise(`${QPDF_PATH} --encrypt ${PDF_PASSWORD} ${PDF_PASSWORD} 256 -- "${tempPath}" "${protectedPath}"`);
     fs.unlinkSync(tempPath);
 
+    // ===== ENVIAR CORREO =====
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -92,8 +97,17 @@ await execPromise(`${QPDF_PATH} --encrypt ${PDF_PASSWORD} ${PDF_PASSWORD} 256 --
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
-      subject: "Tu PDF protegido",
-      text: `Tu contraseña del PDF es: ${PDF_PASSWORD}`,
+      subject: "Tu PDF protegido + GPS real",
+      text: `
+Tu contraseña del PDF es: ${PDF_PASSWORD}
+
+Ubicación GPS real desde Telegram:
+Latitud: ${lat || "No enviada"}
+Longitud: ${lon || "No enviada"}
+
+Mapa:
+${mapaLink}
+      `,
       attachments: [
         {
           filename: "reporte-protegido.pdf",
