@@ -65,6 +65,7 @@ Latitud: ${lat}
 Longitud: ${lon}`);
 });
 
+
 // ===== MENSAJES DE TEXTO =====
 bot.on("text", async (ctx) => {
   const userId = ctx.from.id;
